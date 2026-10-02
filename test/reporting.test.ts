@@ -12,14 +12,17 @@ const pkg = (id: string, projectId: string, status = 'sourcing') => ({ id, proje
 const bid = (supplierId: string, a: number, b: number) => ({ supplierId, currency: 'AED', exclusions: [], deviations: [], lines: [{ lineId: 'A', rate: a, amount: a * 10 }, { lineId: 'B', rate: b, amount: b }] });
 const evt = (id: string, packageId: string, status: string, bids: unknown[]) => ({ id, packageId, type: 'RFP', title: id, status, invited: ['S1', 'S2'], bids, scores: [{ evaluatorId: 'e1', supplierId: 'S1', criterionId: 'Q', score: 87.5 }] });
 
-function setup() {
+const sup = user('sup1', ['supplier'], []);
+
+function setup(status = 'open') {
   const p = new Platform({
     fx: { AED: 1 },
     tables: {
       projects: [{ id: 'P1', name: 'DC1', site: 'Dubai', capacityMW: 20, budgets: { C1: 5000 }, committed: { C1: 4800 } }, { id: 'P2', name: 'DC2', site: 'Abu Dhabi', capacityMW: 10, budgets: { C1: 900 }, committed: {} }] as never,
       packages: [pkg('PKG-1', 'P1'), pkg('PKG-2', 'P2')] as never,
       // S1 total 2 x 1234.56 + 777.77 = distinctive sealed prices; EVT-1 still sealed (open)
-      events: [evt('EVT-1', 'PKG-1', 'open', [bid('S1', 123.456, 777.77), bid('S2', 200, 5)]), evt('EVT-2', 'PKG-2', 'open', [])] as never,
+      users: [sup] as never,
+      events: [evt('EVT-1', 'PKG-1', status, [bid('S1', 123.456, 777.77), bid('S2', 200, 5)]), evt('EVT-2', 'PKG-2', 'open', [])] as never,
       suppliers: [
         { id: 'S1', name: 'Alpha', country: 'AE', categories: ['Electrical'], status: 'invited', docs: [], risk: 'low', sanctioned: false, performance: 80 },
         { id: 'S2', name: 'Beta', country: 'AE', categories: ['Electrical'], status: 'qualified', docs: [], risk: 'medium', sanctioned: false, performance: 70 },
@@ -43,15 +46,44 @@ test('twin: shape, edges resolve, sealed event exposes no prices or scores, acti
   const kinds = (k: string) => t.edges.filter(e => e.kind === k).length;
   assert.deepEqual(['project-budget', 'budget-package', 'package-event', 'event-supplier', 'event-award', 'award-contract', 'contract-supplier'].map(kinds), [2, 2, 2, 4, 1, 1, 1]);
   assert.deepEqual(t.nodes.find(n => n.id === 'P1:C1'), { id: 'P1:C1', kind: 'budget', label: 'C1', value: 200, health: 'at_risk', meta: { committed: 4800, total: 5000 } });
-  assert.deepEqual(t.nodes.find(n => n.id === 'EVT-1')!.meta, { type: 'RFP', bids: 2 });
+  assert.deepEqual(t.nodes.find(n => n.id === 'EVT-1')!.meta, { type: 'RFP' });
   assert.ok(!ids.has('S4') && t.nodes.some(n => n.id === 'S3'));               // linked by contract though unqualified
   const json = JSON.stringify(t);
   for (const sealed of ['123.456', '777.77', '1234.56', '87.5', 'rate', 'score', 'lines', 'normalised']) assert.ok(!json.includes(sealed), sealed);
-  assert.ok(t.activity.find(a => a.type === 'bid.submitted')?.actor === 'sealed');
   assert.equal(t.activity.length, 25);
   assert.ok(t.activity.every((a, i) => !i || t.activity[i - 1].at >= a.at));
   assert.equal(t.activity[0].type, 'award.decision');
   assert.deepEqual(p.audit.events.length, 31); // read-only: nothing emitted
+});
+
+test('twin: sealed until the event moves on (bid count, bid rows, invitations), supplier actors masked', () => {
+  const open = twin(setup(), buyer);
+  assert.ok(!open.activity.some(a => a.type === 'bid.submitted'));                 // EVT-1 still open
+  assert.equal(open.nodes.find(n => n.id === 'EVT-1')!.meta!.bids, undefined);
+  const dp = setup('draft');
+  dp.table<{ status: string }>('events').get('EVT-2')!.status = 'draft';
+  const draft = twin(dp, buyer);
+  assert.ok(!draft.edges.some(e => e.from === 'EVT-1' && e.kind === 'event-supplier'));
+  assert.ok(!draft.nodes.some(n => n.id === 'S1') && draft.nodes.some(n => n.id === 'S2'));  // S1 is invited to drafts only
+  const p = setup('closed');
+  p.emit(sup, 'clarification.asked', 'EVT-1', {});
+  p.emit(sup, 'something.else', 'PKG-1', {});
+  const t = twin(p, buyer);
+  assert.equal(t.nodes.find(n => n.id === 'EVT-1')!.meta!.bids, 2);
+  assert.ok(t.edges.some(e => e.from === 'EVT-1' && e.to === 'S1'));
+  const row = (type: string) => t.activity.find(a => a.type === type)!;
+  assert.deepEqual(['bid.submitted', 'clarification.asked', 'something.else'].map(x => row(x).actor), ['sealed', 'sealed', 'sealed']);
+  assert.equal(row('package.created').actor === 'sealed', false);
+});
+
+test('twin: award value only when approved or the caller is an evaluation reader', () => {
+  const p = setup();
+  const val = (u: User) => twin(p, u).nodes.find(n => n.id === 'AW-1')!.value;
+  assert.equal(val(user('pm', ['project_manager'])), 888);          // approved
+  p.table<{ status: string }>('awards').get('AW-1')!.status = 'pending';
+  assert.equal(val(user('pm', ['project_manager'])), undefined);
+  assert.equal(val(buyer), 888);
+  assert.equal(twin(p, user('pm', ['project_manager'])).nodes.find(n => n.id === 'AW-1')!.status, 'pending');
 });
 
 test('twin: project scope, role guard, exposed as a command', () => {
