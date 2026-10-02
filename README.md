@@ -14,10 +14,10 @@ names or branding.
 
 ## Using it in a product
 
-Pin a released version in the product's `requirements.txt`:
+Pin a released commit in the product's `requirements.txt` (a tag such as `@v0.1.0` works too):
 
 ```
-procurement-core @ git+https://github.com/SatishJag/Procurement_core@v0.1.0
+procurement-core @ git+https://github.com/SatishJag/Procurement_core@<commit sha>
 ```
 
 Mount the API in the product's FastAPI app:
@@ -33,8 +33,8 @@ In Docker builds, pass `GITHUB_TOKEN` as a build argument (see each product's Do
 ## Making a change reach both products
 
 1. Change the code here and run `pytest`.
-2. Bump `version` in `pyproject.toml` and tag the commit (`git tag v0.1.1 && git push origin v0.1.1`).
-3. In each product, change the pin to the new tag and redeploy.
+2. Bump `version` in `pyproject.toml`, merge to `main` and note the commit SHA (optionally tag it).
+3. In each product, change the pin to that commit and redeploy.
 
 Products move to a new version only when their pin changes, so a change made for one product can't
 silently break the other's live demo. If `schema/procurement_core.sql` changed, apply the same change
