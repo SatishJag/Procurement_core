@@ -6,6 +6,7 @@ import * as contracts from './contracts';
 export * as awards from './awards';
 export * as contracts from './contracts';
 export * as evaluation from './evaluation';
+export * as insight from './insight';
 export * as intake from './intake';
 export * as planning from './planning';
 export * as reporting from './reporting';

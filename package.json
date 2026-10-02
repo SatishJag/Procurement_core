@@ -13,8 +13,8 @@
     "modules"
   ],
   "scripts": {
-    "build": "tsc",
-    "test": "node --test test/*.test.ts",
+    "build": "tsc && node scripts/fix-esm.mjs",
+    "test": "node --import ./test/ts-resolve.mjs --test test/*.test.ts",
     "typecheck": "tsc",
     "prepare": "npm run build"
   },
@@ -36,7 +36,16 @@
   "author": "Satish Jag",
   "license": "MIT",
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@types/node": "^22.18.0",
     "typescript": "^5.7.2"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.131.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
   }
 }

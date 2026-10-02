@@ -8,7 +8,7 @@ Source-to-Contract engine: capability core for procurement platforms (data centr
 npm install @satishjag/procurement-core
 ```
 
-Requires Node 22.18+. TypeScript runs directly; no build step. Zero runtime dependencies.
+Requires Node 22.18+. TypeScript runs directly; no build step. Zero runtime dependencies (`@anthropic-ai/sdk` is an optional peer, used only by `insight` when `ANTHROPIC_API_KEY` is set).
 
 ## Usage
 
@@ -37,6 +37,7 @@ const req = intake.submit(p, user, {...});
 | Suppliers | `suppliers` | Registration, qualification, eligibility, discovery ranking |
 | Sourcing | `sourcing` | RFx, BOQ, clarifications, sealed bids (audit holds SHA-256 seal, not prices) |
 | Evaluation | `evaluation` | Two-envelope (technical then commercial), blind scoring, consensus moderation |
+| AI insight | `insight` | Advisory only: Claude second opinion on requisition category and bid-evaluation risks; same guards as the engines (sealed envelope, roles, project), evidence-cited risks only, `insight.generated` audit event. Optional `@anthropic-ai/sdk` + `ANTHROPIC_API_KEY`; no key = rule-based result |
 | Awards | `awards` | Delegation-of-authority bands, sequential approval, SoD |
 | Contracts | `contracts` | Draft per award, triggered by award.approved event |
 | Audit | `audit` | Append-only, hash-chained, tamper-evident |

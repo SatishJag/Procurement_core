@@ -5,6 +5,7 @@ import * as contracts from './contracts.js';
 export * as awards from './awards.js';
 export * as contracts from './contracts.js';
 export * as evaluation from './evaluation.js';
+export * as insight from './insight.js';
 export * as intake from './intake.js';
 export * as planning from './planning.js';
 export * as reporting from './reporting.js';
