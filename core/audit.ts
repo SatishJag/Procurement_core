@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AuditEvent } from './types.ts';
+import type { AuditEvent } from './types';
 
 export const sha256 = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const digest = (e: Omit<AuditEvent, 'hash'>) => sha256([e.seq, e.at, e.actor, e.action, e.entity, e.data, e.prev]);

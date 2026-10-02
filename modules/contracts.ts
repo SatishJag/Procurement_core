@@ -1,5 +1,5 @@
-import type { Handler } from '../core/kernel.ts';
-import type { Award, Contract } from '../core/types.ts';
+import type { Handler } from '../core/kernel';
+import type { Award, Contract } from '../core/types';
 
 // Contract handoff. Phase 2 (contract lifecycle management) grows from here.
 

@@ -1,5 +1,5 @@
-import { addDays, daysBetween } from '../core/dates.ts';
-import type { Health, Milestone, Package, Route, Schedule } from '../core/types.ts';
+import { addDays, daysBetween } from '../core/dates';
+import type { Health, Milestone, Package, Route, Schedule } from '../core/types';
 
 // Weeks each sourcing stage takes per route. Admin-configurable.
 const TENDER_WEEKS: Record<Route, number> = { 'Direct PO': 1, RFQ: 2, RFP: 4, ITT: 6 };

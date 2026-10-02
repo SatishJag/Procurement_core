@@ -1,7 +1,7 @@
-import { daysBetween } from '../core/dates.ts';
-import type { Platform } from '../core/kernel.ts';
-import type { Supplier, SupplierDoc, User } from '../core/types.ts';
-import { available, type Flow, guard, next } from '../core/workflow.ts';
+import { daysBetween } from '../core/dates';
+import type { Platform } from '../core/kernel';
+import type { Supplier, SupplierDoc, User } from '../core/types';
+import { available, type Flow, guard, next } from '../core/workflow';
 
 // Supplier onboarding, qualification, eligibility and discovery.
 

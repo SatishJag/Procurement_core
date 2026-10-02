@@ -1,5 +1,5 @@
-import { AuditLog } from './audit.ts';
-import type { AuditEvent, Package, Project, Supplier, User } from './types.ts';
+import { AuditLog } from './audit';
+import type { AuditEvent, Package, Project, Supplier, User } from './types';
 
 // Sample or migrated data: one array of rows per table. New modules seed their own tables.
 export interface Seed { fx: Record<string, number>; tables: Record<string, { id: string }[]> }

@@ -1,12 +1,12 @@
-import { daysBetween } from '../core/dates.ts';
-import { toCsv } from '../core/csv.ts';
-import type { Platform } from '../core/kernel.ts';
-import type { User } from '../core/types.ts';
-import { guard } from '../core/workflow.ts';
-import { awards } from './awards.ts';
-import { requisitions } from './intake.ts';
-import { health, remaining } from './planning.ts';
-import { events, projectOf } from './sourcing.ts';
+import { daysBetween } from '../core/dates';
+import { toCsv } from '../core/csv';
+import type { Platform } from '../core/kernel';
+import type { User } from '../core/types';
+import { guard } from '../core/workflow';
+import { awards } from './awards';
+import { requisitions } from './intake';
+import { health, remaining } from './planning';
+import { events, projectOf } from './sourcing';
 
 // Dashboards, registers and audit read access. Read-only over other modules' tables.
 

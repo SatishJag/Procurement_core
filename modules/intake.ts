@@ -1,8 +1,8 @@
-import type { Platform } from '../core/kernel.ts';
-import type { BoqTemplate, BudgetCheck, Package, Project, Recommendation, Requisition, Route, User } from '../core/types.ts';
-import { available, type Flow, guard, next } from '../core/workflow.ts';
-import { boqFromCsv } from './sourcing.ts';
-import { schedule } from './planning.ts';
+import type { Platform } from '../core/kernel';
+import type { BoqTemplate, BudgetCheck, Package, Project, Recommendation, Requisition, Route, User } from '../core/types';
+import { available, type Flow, guard, next } from '../core/workflow';
+import { boqFromCsv } from './sourcing';
+import { schedule } from './planning';
 
 // Guided intake: free text + value → structured requisition → approved package.
 

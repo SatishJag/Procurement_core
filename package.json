@@ -4,17 +4,19 @@
   "description": "Source-to-Contract capability core: intake, planning, suppliers, sourcing, evaluation, awards, contracts, reporting",
   "type": "module",
   "exports": {
-    ".": "./modules/index.ts",
-    "./core": "./core/kernel.ts",
-    "./types": "./core/types.ts"
+    ".": "./modules/index.js",
+    "./core": "./core/kernel.js",
+    "./types": "./core/types.js"
   },
   "files": [
     "core",
     "modules"
   ],
   "scripts": {
+    "build": "tsc",
     "test": "node --test test/*.test.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "prepare": "npm run build"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

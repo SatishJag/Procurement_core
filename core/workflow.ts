@@ -1,4 +1,4 @@
-import type { Role, User } from './types.ts';
+import type { Role, User } from './types';
 
 // Table-driven state machines. Each module declares its own Flow table (stages,
 // transitions, allowed roles) so an administrator edits data, not code.

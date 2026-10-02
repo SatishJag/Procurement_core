@@ -1,7 +1,7 @@
-import type { Platform } from '../core/kernel.ts';
-import type { Allocation, Bid, Role, SourcingEvent, User } from '../core/types.ts';
-import { guard } from '../core/workflow.ts';
-import { advance, eventFor } from './sourcing.ts';
+import type { Platform } from '../core/kernel';
+import type { Allocation, Bid, Role, SourcingEvent, User } from '../core/types';
+import { guard } from '../core/workflow';
+import { advance, eventFor } from './sourcing';
 
 // The evaluation engine (pure functions): technical consensus, commercial
 // normalization, combined ranking, weight sensitivity and award scenarios.

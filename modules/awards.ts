@@ -1,9 +1,9 @@
-import type { Platform } from '../core/kernel.ts';
-import type { ApprovalStep, Award, Package, Project, Role, User } from '../core/types.ts';
-import { guard } from '../core/workflow.ts';
-import { results } from './evaluation.ts';
-import { checkBudget } from './intake.ts';
-import { advance, eventFor } from './sourcing.ts';
+import type { Platform } from '../core/kernel';
+import type { ApprovalStep, Award, Package, Project, Role, User } from '../core/types';
+import { guard } from '../core/workflow';
+import { results } from './evaluation';
+import { checkBudget } from './intake';
+import { advance, eventFor } from './sourcing';
 
 // Award recommendation and delegation-of-authority approval.
 // Emits award.approved, which downstream modules (contracts, later POs) subscribe to.
