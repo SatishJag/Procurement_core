@@ -1,8 +1,8 @@
-import { sha256 } from '../core/audit';
-import { parseCsv } from '../core/csv';
-import { available, guard, next } from '../core/workflow';
-import { ROUTES } from './intake';
-import { eligibility } from './suppliers';
+import { sha256 } from '../core/audit.js';
+import { parseCsv } from '../core/csv.js';
+import { available, guard, next } from '../core/workflow.js';
+import { ROUTES } from './intake.js';
+import { eligibility } from './suppliers.js';
 // Sourcing events (RFQ / RFP / ITT): setup, publication, clarifications, sealed bids.
 const approvers = ['procurement_manager', 'budget_owner', 'legal', 'executive'];
 export const eventFlow = {

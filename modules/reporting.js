@@ -1,10 +1,10 @@
-import { daysBetween } from '../core/dates';
-import { toCsv } from '../core/csv';
-import { guard } from '../core/workflow';
-import { awards } from './awards';
-import { requisitions } from './intake';
-import { health, remaining } from './planning';
-import { events, projectOf } from './sourcing';
+import { daysBetween } from '../core/dates.js';
+import { toCsv } from '../core/csv.js';
+import { guard } from '../core/workflow.js';
+import { awards } from './awards.js';
+import { requisitions } from './intake.js';
+import { health, remaining } from './planning.js';
+import { events, projectOf } from './sourcing.js';
 // Dashboards, registers and audit read access. Read-only over other modules' tables.
 export function dashboard(p, user) {
     const today = p.today;

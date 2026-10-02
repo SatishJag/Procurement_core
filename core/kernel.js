@@ -1,4 +1,4 @@
-import { AuditLog } from './audit';
+import { AuditLog } from './audit.js';
 // Shared kernel: tables, clock, ids, the audit chain and domain events.
 // Capabilities live in modules/ as plain functions over this object, so adding
 // one never edits this file.

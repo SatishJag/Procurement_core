@@ -1,5 +1,5 @@
-import { guard } from '../core/workflow';
-import { advance, eventFor } from './sourcing';
+import { guard } from '../core/workflow.js';
+import { advance, eventFor } from './sourcing.js';
 // The evaluation engine (pure functions): technical consensus, commercial
 // normalization, combined ranking, weight sensitivity and award scenarios.
 // Commands at the bottom drive the two sealed envelopes.

@@ -1,5 +1,5 @@
-import { daysBetween } from '../core/dates';
-import { available, guard, next } from '../core/workflow';
+import { daysBetween } from '../core/dates.js';
+import { available, guard, next } from '../core/workflow.js';
 // Supplier onboarding, qualification, eligibility and discovery.
 export const REQUIRED_DOCS = ['trade_licence', 'insurance', 'tax_certificate'];
 const EXPIRY_WARNING_DAYS = 30;

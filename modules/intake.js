@@ -1,6 +1,6 @@
-import { available, guard, next } from '../core/workflow';
-import { boqFromCsv } from './sourcing';
-import { schedule } from './planning';
+import { available, guard, next } from '../core/workflow.js';
+import { boqFromCsv } from './sourcing.js';
+import { schedule } from './planning.js';
 // Guided intake: free text + value → structured requisition → approved package.
 // Category taxonomy with typical manufacturing + delivery lead times (weeks).
 // ponytail: keyword classifier. Swap for an LLM classifier later; keep the

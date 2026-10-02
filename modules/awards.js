@@ -1,7 +1,7 @@
-import { guard } from '../core/workflow';
-import { results } from './evaluation';
-import { checkBudget } from './intake';
-import { advance, eventFor } from './sourcing';
+import { guard } from '../core/workflow.js';
+import { results } from './evaluation.js';
+import { checkBudget } from './intake.js';
+import { advance, eventFor } from './sourcing.js';
 // Award recommendation and delegation-of-authority approval.
 // Emits award.approved, which downstream modules (contracts, later POs) subscribe to.
 // Delegation-of-authority matrix (AED). First band that covers the value wins.

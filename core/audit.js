@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash } from 'node:crypto.js';
 export const sha256 = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const digest = (e) => sha256([e.seq, e.at, e.actor, e.action, e.entity, e.data, e.prev]);
 // Append-only, hash-chained audit trail: editing or removing any event breaks verify().

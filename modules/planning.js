@@ -1,4 +1,4 @@
-import { addDays, daysBetween } from '../core/dates';
+import { addDays, daysBetween } from '../core/dates.js';
 // Weeks each sourcing stage takes per route. Admin-configurable.
 const TENDER_WEEKS = { 'Direct PO': 1, RFQ: 2, RFP: 4, ITT: 6 };
 const EVAL_WEEKS = { 'Direct PO': 0, RFQ: 1, RFP: 3, ITT: 4 };
