@@ -1,0 +1,40 @@
+{
+  "name": "@satishjag/procurement-core",
+  "version": "0.1.0",
+  "description": "Source-to-Contract capability core: intake, planning, suppliers, sourcing, evaluation, awards, contracts, reporting",
+  "type": "module",
+  "exports": {
+    ".": "./modules/index.ts",
+    "./core": "./core/kernel.ts",
+    "./types": "./core/types.ts"
+  },
+  "files": [
+    "core",
+    "modules"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SatishJag/procurement-core.git"
+  },
+  "keywords": [
+    "procurement",
+    "source-to-contract",
+    "sourcing",
+    "evaluation",
+    "awards",
+    "capital-projects"
+  ],
+  "author": "Satish Jag",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.7.2"
+  }
+}
