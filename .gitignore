@@ -1,7 +1,5 @@
 node_modules/
 *.tsbuildinfo
 .DS_Store
-core/**/*.js
-modules/**/*.js
 test/**/*.js
 package-lock.json
