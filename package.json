@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc && node scripts/fix-esm.mjs",
     "test": "node --import ./test/ts-resolve.mjs --test test/*.test.ts",
-    "typecheck": "tsc",
+    "typecheck": "tsc --noEmit",
     "prepare": "npm run build"
   },
   "publishConfig": {

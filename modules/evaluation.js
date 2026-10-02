@@ -271,7 +271,7 @@ export function loadExclusion(p, user, eventId, supplierId, index, addBackAED) {
     x.addBack = addBackAED;
     p.emit(user, 'exclusion.loaded', ev.id, { supplierId, exclusion: x.description, addBackAED });
 }
-const READERS = ['buyer', 'procurement_manager', 'commercial_evaluator', 'auditor', 'budget_owner', 'legal', 'executive'];
+export const READERS = ['buyer', 'procurement_manager', 'commercial_evaluator', 'auditor', 'budget_owner', 'legal', 'executive'];
 export function results(p, user, eventId) {
     const ev = eventFor(p, user, eventId);
     guard(user, READERS);

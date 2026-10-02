@@ -3,7 +3,8 @@ import { afterEach, test } from 'node:test';
 import { sha256 } from '../core/audit.ts';
 import { Platform } from '../core/kernel.ts';
 import type { Requisition, SourcingEvent, User } from '../core/types.ts';
-import { analyzeBids, classifyRequisition, insights, setComplete, type Request } from '../modules/insight.ts';
+import { AiError, analyzeBids, classifyRequisition, insights, MODEL } from '../modules/insight.ts';
+import { type Request, setComplete } from '../modules/insight-seam.ts';
 
 const user = (id: string, roles: User['roles'], projects = ['*']): User => ({ id, name: id, roles, projects });
 const buyer = user('buyer', ['buyer', 'requester']);
@@ -59,8 +60,8 @@ test('classify: bad ids, roles, project scope and malformed model output are ref
   await assert.rejects(classifyRequisition(p, user('s', ['supplier']), 'REQ-1'), /needs one of/);
   await assert.rejects(classifyRequisition(p, outsider, 'REQ-1'), /no access to project P1/);
   await assert.rejects(classifyRequisition(p, buyer, 'REQ-1'), /could not read/);
-  assert.equal(insights(p).size, 0);       // nothing stored or audited for a failed call
-  assert.equal(p.audit.events.length, 0);
+  assert.equal(insights(p).size, 0);       // nothing stored for a failed call; the attempt is audited, reason code only
+  assert.deepEqual(p.audit.events.map(e => [e.action, (e.data as { reason: string }).reason]), [['insight.failed', 'unusable']]);
 });
 
 test('no key: deterministic engine result with a notice, no AI record, no audit event', async () => {
@@ -92,20 +93,27 @@ test('analyze: sealed envelope, roles and unknown events block the model call', 
 test('analyze: risks citing evidence or bidders not in the engine output are dropped; the input hash covers exactly what was sent', async () => {
   const p = setup();
   const good = { severity: 'high', supplierId: 'S3', text: 'Abnormally low total', evidenceRef: 'anom:S3:0' };
+  const scn = { other: 'scn:best_value' };   // best value is S3 alone
   stub({
     summary: 'S1 ranks first.',
     risks: [good,
       { ...good, evidenceRef: 'anom:S3:99' },                    // invented ref
       { ...good, supplierId: 'S9' },                             // invented bidder
+      { ...good, supplierId: 'S1' },                             // real bidder, but the anomaly belongs to S3
+      { ...good, supplierId: 'S1', evidenceRef: scn.other },     // scenario that does not allocate to S1
       { ...good, severity: 'catastrophic' },                     // bad severity
       { severity: 'low', supplierId: 'S1', text: 'Ranked first', evidenceRef: 'rank:S1' }],
-    scenarioNotes: ['Split award saves nothing'], questionsForBidders: ['Confirm S3 scope'],
+    scenarioNotes: ['Split award saves nothing'], questionsForBidders: ['What is S3 price vs S1?'],
   });
   const r = await analyzeBids(p, buyer, 'EVT-1');
   assert.equal(r.source, 'ai');
   assert.ok('risks' in r);
   assert.deepEqual(r.risks.map(x => x.evidenceRef), ['anom:S3:0', 'rank:S1']);
-  assert.equal(r.dropped, 3);
+  assert.equal(r.dropped, 5);
+  assert.ok(!('questionsForBidders' in r) && !/questionsForBidders/.test(JSON.stringify(sent[0].schema)));   // free text that could leak prices is gone
+  assert.equal(r.internalOnly, true);
+  assert.equal(r.engineAnomalies.length, 2);                      // engine anomalies come back verbatim
+  assert.deepEqual(r.uncitedAnomalies, ['anom:S3:1']);            // and the one the model skipped is flagged
   const input = JSON.parse(sent[0].input);
   assert.ok(input.normalized[2].anomalies.some((a: { ref: string }) => a.ref === 'anom:S3:0'));
   assert.ok(!/ANTHROPIC|sk-ant/.test(sent[0].input));
@@ -118,4 +126,29 @@ test('analyze: risks citing evidence or bidders not in the engine output are dro
 
   stub({ summary: 1 });
   await assert.rejects(analyzeBids(p, buyer, 'EVT-1'), /could not read/);
+});
+
+test('analyze: a scenario ref is citable only for bidders allocated in it', async () => {
+  const p = setup();
+  const risk = (supplierId: string) => ({ severity: 'low', supplierId, text: 'Split risk', evidenceRef: 'scn:best_value' });
+  stub({ summary: '', risks: [risk('S3'), risk('S1')], scenarioNotes: [] });
+  const r = await analyzeBids(p, buyer, 'EVT-1');
+  assert.ok('risks' in r);
+  assert.deepEqual(r.risks.map(x => x.supplierId), ['S3']);
+});
+
+test('failed model calls are audited with a reason code only, then thrown; calls that never left the process are not', async () => {
+  const p = setup();
+  setComplete(async () => { throw new AiError('refusal', 'The AI service declined to analyse this request.'); });
+  await assert.rejects(analyzeBids(p, buyer, 'EVT-1'), /declined/);
+  const [failed] = p.audit.events;
+  assert.equal(failed.action, 'insight.failed');
+  assert.equal(failed.entity, 'EVT-1');
+  assert.deepEqual(failed.data, { kind: 'analyze', model: MODEL, inputHash: failed.data && (failed.data as { inputHash: string }).inputHash, reason: 'refusal' });
+  assert.match((failed.data as { inputHash: string }).inputHash, /^[0-9a-f]{64}$/);
+  assert.equal(insights(p).size, 0);
+  setComplete(async () => { throw new Error('SDK not installed'); });
+  await assert.rejects(classifyRequisition(p, buyer, 'REQ-1'), /SDK not installed/);
+  assert.equal(p.audit.events.length, 1);
+  assert.deepEqual(p.audit.verify(), { ok: true });
 });

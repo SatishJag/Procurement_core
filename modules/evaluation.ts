@@ -294,7 +294,7 @@ export function loadExclusion(p: Platform, user: User, eventId: string, supplier
   p.emit(user, 'exclusion.loaded', ev.id, { supplierId, exclusion: x.description, addBackAED });
 }
 
-const READERS: Role[] = ['buyer', 'procurement_manager', 'commercial_evaluator', 'auditor', 'budget_owner', 'legal', 'executive'];
+export const READERS: Role[] = ['buyer', 'procurement_manager', 'commercial_evaluator', 'auditor', 'budget_owner', 'legal', 'executive'];
 
 export function results(p: Platform, user: User, eventId: string) {
   const ev = eventFor(p, user, eventId);
