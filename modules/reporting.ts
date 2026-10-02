@@ -11,6 +11,8 @@ import { events, projectOf } from './sourcing';
 // Dashboards, registers and audit read access. Read-only over other modules' tables.
 
 export function dashboard(p: Platform, user: User) {
+  // Supplier-portal users must not read internal pipeline, savings or other suppliers' compliance data.
+  if (user.roles.every(r => r === 'supplier')) throw new Error(`${user.name} needs an internal role to open the dashboard`);
   const today = p.today;
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
   const packages = [...p.packages.values()].filter(x => p.sees(user, x.projectId)).map(x => ({

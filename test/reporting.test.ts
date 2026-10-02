@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Platform } from '../core/kernel.ts';
 import type { User } from '../core/types.ts';
-import { commands, twin } from '../modules/reporting.ts';
+import { commands, dashboard, twin } from '../modules/reporting.ts';
 
 const user = (id: string, roles: User['roles'], projects = ['*']): User => ({ id, name: id, roles, projects });
 const buyer = user('buyer', ['buyer']), p1buyer = user('b1', ['buyer'], ['P1']), p2buyer = user('b2', ['buyer'], ['P2']);
@@ -62,4 +62,10 @@ test('twin: project scope, role guard, exposed as a command', () => {
   assert.equal(twin(p, p2buyer).nodes.some(n => n.id === 'CT-1'), true);
   for (const r of ['supplier', 'technical_evaluator', 'requester'] as const) assert.throws(() => twin(p, user('x', [r])), /needs one of/);
   assert.equal(commands.twin, twin);
+});
+
+test('dashboard: supplier-portal users are blocked, internal roles still work', () => {
+  const p = setup();
+  assert.throws(() => dashboard(p, user('s', ['supplier'], [])), /internal role/);
+  assert.ok(dashboard(p, user('b', ['buyer'])).pipeline);
 });
