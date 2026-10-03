@@ -60,14 +60,27 @@ export function qualify(p, user, supplierId, action, note = '') {
     p.emit(user, `supplier.${s.status}`, s.id, { note });
     return s;
 }
+const SEARCHERS = ['buyer', 'procurement_manager', 'category_manager'];
 // Supplier discovery for a category, eligible first.
 export function search(p, user, category) {
-    guard(user, ['buyer', 'procurement_manager', 'category_manager']);
+    guard(user, SEARCHERS);
     return discover([...p.suppliers.values()], category, p.today);
+}
+const card = (s, today) => ({
+    id: s.id, name: s.name, status: s.status, country: s.country, categories: s.categories, risk: s.risk, performance: s.performance, sanctioned: s.sanctioned,
+    docs: s.docs.map(d => ({ ...d, state: d.expires < today ? 'expired' : daysBetween(today, d.expires) <= EXPIRY_WARNING_DAYS ? 'expiring' : 'valid' })),
+});
+export function list(p, user) {
+    guard(user, SEARCHERS);
+    return [...p.suppliers.values()].map(s => card(s, p.today));
+}
+export function get(p, user, supplierId) {
+    guard(user, SEARCHERS);
+    return card(p.get('suppliers', supplierId), p.today);
 }
 export function actions(p, user, supplierId) {
     if (user.roles.includes('supplier') && user.supplierId !== supplierId)
         return [];
     return available(supplierFlow, p.get('suppliers', supplierId).status, user);
 }
-export const commands = { register, qualify, search, actions };
+export const commands = { register, qualify, search, actions, list, get };

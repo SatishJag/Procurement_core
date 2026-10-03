@@ -143,13 +143,12 @@ export function uploadBoq(p, user, input) {
     return boq;
 }
 export function createPackagesFromBoq(p, user, input) {
-    guard(user, ['buyer', 'procurement_manager'], { projectId: input.costCode });
+    const boq = p.get('boqTemplates', input.boqTemplateId);
+    guard(user, ['buyer', 'procurement_manager'], { projectId: boq.projectId });
     if (!(input.estimate > 0))
         throw new Error('Estimate must be positive');
     if (!ISO_DATE.test(input.needBy) || input.needBy <= p.today)
         throw new Error('Need-by must be a future YYYY-MM-DD date');
-    const boq = p.get('boqTemplates', input.boqTemplateId);
-    guard(user, user.roles, { projectId: boq.projectId });
     const project = p.get('projects', boq.projectId);
     const budgetCheck = checkBudget(project, input.costCode, input.estimate);
     if (!budgetCheck.ok)
@@ -163,10 +162,20 @@ export function createPackagesFromBoq(p, user, input) {
     p.emit(user, 'package.created', pkg.id, { boqTemplate: input.boqTemplateId, route: input.route, longLead: input.longLead });
     return pkg;
 }
+// Read models: the requester sees their own; buyers, managers and budget owners see their projects'.
+const REQ_VIEWERS = ['buyer', 'procurement_manager', 'budget_owner'];
+const canSee = (p, user, r) => r.requesterId === user.id || (user.roles.some(x => REQ_VIEWERS.includes(x)) && p.sees(user, r.projectId));
+export function get(p, user, requisitionId) {
+    const r = p.get('requisitions', requisitionId);
+    if (!canSee(p, user, r))
+        throw new Error(`${user.name} has no access to requisition ${requisitionId}`);
+    return r;
+}
+export const list = (p, user) => [...requisitions(p).values()].filter(r => canSee(p, user, r));
 // What the API may call. Pure helpers above stay internal.
 export function actions(p, user, id) {
     const req = p.get('requisitions', id);
     guard(user, user.roles, { projectId: req.projectId });
     return available(requisitionFlow, req.status, user);
 }
-export const commands = { submit, decide, uploadBoq, createPackagesFromBoq, actions };
+export const commands = { submit, decide, uploadBoq, createPackagesFromBoq, actions, get, list };

@@ -1,5 +1,5 @@
 import type { Platform } from '../core/kernel';
-import type { BoqTemplate, BudgetCheck, Package, Project, Recommendation, Requisition, Route, User } from '../core/types';
+import type { BoqTemplate, BudgetCheck, Package, Project, Recommendation, Requisition, Role, Route, User } from '../core/types';
 import { available, type Flow, guard, next } from '../core/workflow';
 import { boqFromCsv } from './sourcing';
 import { schedule } from './planning';
@@ -148,11 +148,10 @@ export function uploadBoq(p: Platform, user: User, input: { projectId: string; n
 }
 
 export function createPackagesFromBoq(p: Platform, user: User, input: { boqTemplateId: string; costCode: string; category: string; estimate: number; needBy: string; route: Route; longLead: boolean }) {
-  guard(user, ['buyer', 'procurement_manager'], { projectId: input.costCode });
+  const boq = p.get<BoqTemplate>('boqTemplates', input.boqTemplateId);
+  guard(user, ['buyer', 'procurement_manager'], { projectId: boq.projectId });
   if (!(input.estimate > 0)) throw new Error('Estimate must be positive');
   if (!ISO_DATE.test(input.needBy) || input.needBy <= p.today) throw new Error('Need-by must be a future YYYY-MM-DD date');
-  const boq = p.get<BoqTemplate>('boqTemplates', input.boqTemplateId);
-  guard(user, user.roles, { projectId: boq.projectId });
   const project = p.get<Project>('projects', boq.projectId);
   const budgetCheck = checkBudget(project, input.costCode, input.estimate);
   if (!budgetCheck.ok) throw new Error(`Budget shortfall of AED ${budgetCheck.shortfall.toLocaleString('en')}: raise a budget transfer first`);
@@ -166,6 +165,19 @@ export function createPackagesFromBoq(p: Platform, user: User, input: { boqTempl
   return pkg;
 }
 
+// Read models: the requester sees their own; buyers, managers and budget owners see their projects'.
+const REQ_VIEWERS: Role[] = ['buyer', 'procurement_manager', 'budget_owner'];
+const canSee = (p: Platform, user: User, r: Requisition) =>
+  r.requesterId === user.id || (user.roles.some(x => REQ_VIEWERS.includes(x)) && p.sees(user, r.projectId));
+
+export function get(p: Platform, user: User, requisitionId: string) {
+  const r = p.get<Requisition>('requisitions', requisitionId);
+  if (!canSee(p, user, r)) throw new Error(`${user.name} has no access to requisition ${requisitionId}`);
+  return r;
+}
+
+export const list = (p: Platform, user: User) => [...requisitions(p).values()].filter(r => canSee(p, user, r));
+
 // What the API may call. Pure helpers above stay internal.
 export function actions(p: Platform, user: User, id: string) {
   const req = p.get<Requisition>('requisitions', id);
@@ -173,4 +185,4 @@ export function actions(p: Platform, user: User, id: string) {
   return available(requisitionFlow, req.status, user);
 }
 
-export const commands = { submit, decide, uploadBoq, createPackagesFromBoq, actions };
+export const commands = { submit, decide, uploadBoq, createPackagesFromBoq, actions, get, list };

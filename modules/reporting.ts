@@ -7,7 +7,7 @@ import { awards } from './awards';
 import { READERS } from './evaluation';
 import { requisitions } from './intake';
 import { health, remaining } from './planning';
-import { events, projectOf } from './sourcing';
+import { EVALUATOR_KNOWERS, events, projectOf, STAFF } from './sourcing';
 
 // Dashboards, registers and audit read access. Read-only over other modules' tables.
 
@@ -65,7 +65,7 @@ type Meta = Record<string, string | number>;
 export interface TwinNode { id: string; kind: 'project' | 'budget' | 'package' | 'supplier' | 'event' | 'award' | 'contract'; label: string; status?: string; value?: number; health?: Health; meta?: Meta }
 export interface TwinEdge { from: string; to: string; kind: string }
 // Internal roles only: evaluators (blind), requesters and supplier-portal users do not get the enterprise map.
-const TWIN_ROLES: Role[] = ['buyer', 'procurement_manager', 'category_manager', 'project_manager', 'executive', 'finance', 'budget_owner', 'legal', 'compliance_reviewer', 'auditor', 'admin'];
+const TWIN_ROLES = STAFF;
 
 export function twin(p: Platform, user: User) {
   guard(user, TWIN_ROLES);
@@ -114,4 +114,17 @@ export function twin(p: Platform, user: User) {
   return { nodes, edges, activity };
 }
 
-export const commands = { dashboard, exportPackages, history, twin };
+// Directory of internal people for pickers. Supplier-portal users never appear; evaluator-role holders only to
+// roles that may know the committee (the role itself would otherwise name the committee).
+const EVALUATORS: Role[] = ['technical_evaluator', 'commercial_evaluator'];
+export function people(p: Platform, user: User) {
+  guard(user, TWIN_ROLES);
+  const knows = user.roles.some(r => EVALUATOR_KNOWERS.includes(r));
+  return [...p.users.values()]
+    .filter(u => !u.supplierId && !u.roles.includes('supplier') && (knows || !u.roles.some(r => EVALUATORS.includes(r))))
+    .map(({ id, name, roles }) => ({ id, name, roles }));
+}
+
+export const me = (_p: Platform, { id, name, roles, projects, approvalLimit }: User) => ({ id, name, roles, projects, approvalLimit });
+
+export const commands = { dashboard, exportPackages, history, twin, people, me };

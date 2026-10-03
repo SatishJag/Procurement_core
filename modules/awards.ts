@@ -1,9 +1,9 @@
 import type { Platform } from '../core/kernel';
-import type { ApprovalStep, Award, Package, Project, Role, User } from '../core/types';
+import type { ApprovalStep, Award, Package, Project, Role, SourcingEvent, User } from '../core/types';
 import { guard } from '../core/workflow';
-import { results } from './evaluation';
+import { READERS, results } from './evaluation';
 import { checkBudget } from './intake';
-import { advance, eventFor } from './sourcing';
+import { advance, eventFor, projectOf, STAFF } from './sourcing';
 
 // Award recommendation and delegation-of-authority approval.
 // Emits award.approved, which downstream modules (contracts, later POs) subscribe to.
@@ -30,11 +30,8 @@ export function routeApproval(value: number, { overBudget = false, deviation = f
   return steps.sort((a, b) => ORDER.indexOf(a.role) - ORDER.indexOf(b.role));
 }
 
-// Sequential approval with segregation of duties and authority limits.
-export function applyDecision(
-  award: Award, user: User, decision: 'approved' | 'rejected', comment: string, at: string,
-  conflicted: string[], // requester, evaluators: may not approve their own outcome
-) {
+// Can this user decide the award's current step? Throws the engine's reason; changes nothing.
+export function checkDecision(award: Award, user: User, decision: 'approved' | 'rejected', comment: string, conflicted: string[]) {
   if (award.status !== 'pending') throw new Error(`Award is already ${award.status}`);
   const step = award.steps.find(s => !s.decision)!;
   if (!user.roles.includes(step.role)) throw new Error(`Awaiting ${step.role}, not ${user.name}`);
@@ -46,6 +43,15 @@ export function applyDecision(
     throw new Error(`${user.name}'s authority limit is below AED ${award.value.toLocaleString('en')}`);
   }
   if (decision === 'rejected' && !comment.trim()) throw new Error('A rejection needs a reason');
+  return { step, last };
+}
+
+// Sequential approval with segregation of duties and authority limits.
+export function applyDecision(
+  award: Award, user: User, decision: 'approved' | 'rejected', comment: string, at: string,
+  conflicted: string[], // requester, evaluators: may not approve their own outcome
+) {
+  const { step, last } = checkDecision(award, user, decision, comment, conflicted);
   Object.assign(step, { decision, by: user.id, at, comment });
   award.status = decision === 'rejected' ? 'rejected' : last ? 'approved' : 'pending';
   return award;
@@ -53,6 +59,7 @@ export function applyDecision(
 
 export const awards = (p: Platform) => p.table<Award>('awards');
 const APPROVERS: Role[] = ['procurement_manager', 'budget_owner', 'legal', 'executive'];
+const conflictedOf = (pkg: Package, ev: SourcingEvent) => [pkg.requesterId ?? '', ...ev.evaluators];
 
 export function recommend(p: Platform, user: User, eventId: string, scenarioId: string, justification = '') {
   const ev = eventFor(p, user, eventId);
@@ -83,7 +90,7 @@ export function decide(p: Platform, user: User, awardId: string, decision: 'appr
   const pkg = p.get<Package>('packages', ev.packageId);
   guard(user, APPROVERS, { projectId: pkg.projectId });
   const step = award.steps.find(s => !s.decision)!;
-  applyDecision(award, user, decision, comment, p.clock(), [pkg.requesterId ?? '', ...ev.evaluators]);
+  applyDecision(award, user, decision, comment, p.clock(), conflictedOf(pkg, ev));
   p.emit(user, 'award.decision', award.id, { role: step.role, decision, comment });
   if (award.status === 'rejected') advance(ev, 'reject', user);
   if (award.status !== 'approved') return award;
@@ -104,4 +111,39 @@ export function actions(p: Platform, user: User, awardId: string) {
   return step && user.roles.includes(step.role) ? ['approved', 'rejected'] : [];
 }
 
-export const commands = { recommend, decide, actions };
+// Read models for staff. Same rule as the twin: value, allocations and rationale only once approved or for evaluation READERS;
+// otherwise the AED amount in step reasons is masked too.
+function shape(user: User, a: Award) {
+  const { value, allocations, justification, steps, ...rest } = a;
+  if (a.status === 'approved' || user.roles.some(r => READERS.includes(r))) return { ...rest, steps, value, allocations, justification };
+  return { ...rest, steps: steps.map(s => ({ ...s, reason: s.reason.replace(/AED [\d,]+(\.\d+)?/g, 'AED (sealed)') })) };
+}
+
+export function get(p: Platform, user: User, awardId: string) {
+  const award = p.get<Award>('awards', awardId);
+  eventFor(p, user, award.eventId);
+  guard(user, STAFF);
+  return shape(user, award);
+}
+
+export function list(p: Platform, user: User) {
+  guard(user, STAFF);
+  return [...awards(p).values()].filter(a => p.sees(user, projectOf(p, p.get<SourcingEvent>('events', a.eventId)))).map(a => shape(user, a));
+}
+
+// Can the caller decide now? mine=false carries the engine's reason; mine=true may still carry the reason approving is blocked (authority limit).
+export function check(p: Platform, user: User, awardId: string): { mine: boolean; reason?: string } {
+  const award = p.get<Award>('awards', awardId);
+  const ev = eventFor(p, user, award.eventId);
+  guard(user, STAFF);
+  const conflicted = conflictedOf(p.get<Package>('packages', ev.packageId), ev);
+  const why = (d: 'approved' | 'rejected') => {
+    try { guard(user, APPROVERS); checkDecision(award, user, d, 'check', conflicted); } catch (e) { return (e as Error).message; }
+  };
+  const blocked = why('rejected');
+  if (blocked) return { mine: false, reason: blocked };
+  const approve = why('approved');
+  return approve ? { mine: true, reason: approve } : { mine: true };
+}
+
+export const commands = { recommend, decide, actions, get, list, check };

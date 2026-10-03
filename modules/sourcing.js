@@ -175,9 +175,49 @@ export function close(p, user, eventId) {
     p.emit(user, 'event.closed', ev.id, { bids: ev.bids.map(b => ({ supplierId: b.supplierId, seal: sha256(b) })) });
     return ev;
 }
+// Read models for staff. Never prices, rates or bidder identities; bid count only once closed.
+export const STAFF = ['buyer', 'procurement_manager', 'category_manager', 'project_manager', 'executive', 'finance', 'budget_owner', 'legal', 'compliance_reviewer', 'auditor', 'admin'];
+export const EVALUATOR_KNOWERS = ['buyer', 'procurement_manager', 'auditor']; // may know who sits on the committee
+const INVITEE_VIEWERS = ['buyer', 'procurement_manager', 'category_manager', 'project_manager', 'executive', 'auditor'];
+const has = (user, roles) => user.roles.some(r => roles.includes(r));
+const unopened = (ev) => ev.status === 'draft' || ev.status === 'open';
+// Staff, or an evaluator once their envelope is open (committee member / commercial evaluator). Suppliers use portal.
+function staffEvent(p, user, id) {
+    const ev = eventFor(p, user, id);
+    const evaluating = !unopened(ev) && ev.status !== 'closed' &&
+        (user.roles.includes('commercial_evaluator') || (user.roles.includes('technical_evaluator') && ev.evaluators.includes(user.id)));
+    if (!has(user, STAFF) && !evaluating)
+        throw new Error(`${user.name} needs one of: ${STAFF.join(', ')}`);
+    return ev;
+}
+export function view(p, user, eventId) {
+    const ev = staffEvent(p, user, eventId);
+    const invitees = has(user, ['buyer', 'procurement_manager']) || (has(user, INVITEE_VIEWERS) && ev.status !== 'draft');
+    return {
+        id: ev.id, title: ev.title, status: ev.status, type: ev.type, packageId: ev.packageId, closesAt: ev.closesAt, blind: ev.blind,
+        lots: ev.lots, criteria: ev.criteria,
+        ...(has(user, EVALUATOR_KNOWERS) ? { evaluators: ev.evaluators.map(id => ({ id, name: p.users.get(id)?.name ?? id })) } : {}),
+        ...(invitees ? { invited: ev.invited.map(id => ({ id, name: p.suppliers.get(id)?.name ?? id })) } : {}),
+        ...(unopened(ev) ? {} : { bids: ev.bids.length }),
+    };
+}
+export function clarifications(p, user, eventId) {
+    const ev = staffEvent(p, user, eventId);
+    const reveal = !unopened(ev) && has(user, INVITEE_VIEWERS);
+    return ev.clarifications.map(c => ({
+        id: c.id, question: c.question, answered: !!c.answer, answer: c.answer, extendedTo: c.extendedTo, askedBy: reveal ? c.supplierId : 'sealed',
+    }));
+}
+// Supplier portal: published events this supplier is invited to, nothing else.
+export function invitations(p, user) {
+    guard(user, ['supplier']);
+    return [...events(p).values()]
+        .filter(e => e.status !== 'draft' && !!user.supplierId && e.invited.includes(user.supplierId))
+        .map(({ id, title, closesAt, status }) => ({ id, title, closesAt, status }));
+}
 // Event-stage actions. Approval-stage buttons come from awards.actions.
 export function actions(p, user, eventId) {
     const ev = eventFor(p, user, eventId);
     return ev.status === 'approval' ? [] : available(eventFlow, ev.status, user);
 }
-export const commands = { create, publish, clarify, answer, portal, submitBid, close, actions };
+export const commands = { create, publish, clarify, answer, portal, submitBid, close, actions, view, clarifications, invitations };

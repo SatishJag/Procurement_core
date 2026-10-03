@@ -1,6 +1,6 @@
 import { daysBetween } from '../core/dates';
 import type { Platform } from '../core/kernel';
-import type { Supplier, SupplierDoc, User } from '../core/types';
+import type { Role, Supplier, SupplierDoc, User } from '../core/types';
 import { available, type Flow, guard, next } from '../core/workflow';
 
 // Supplier onboarding, qualification, eligibility and discovery.
@@ -62,10 +62,27 @@ export function qualify(p: Platform, user: User, supplierId: string, action: 'qu
   return s;
 }
 
+const SEARCHERS: Role[] = ['buyer', 'procurement_manager', 'category_manager'];
+
 // Supplier discovery for a category, eligible first.
 export function search(p: Platform, user: User, category: string) {
-  guard(user, ['buyer', 'procurement_manager', 'category_manager']);
+  guard(user, SEARCHERS);
   return discover([...p.suppliers.values()], category, p.today);
+}
+
+const card = (s: Supplier, today: string) => ({
+  id: s.id, name: s.name, status: s.status, country: s.country, categories: s.categories, risk: s.risk, performance: s.performance, sanctioned: s.sanctioned,
+  docs: s.docs.map(d => ({ ...d, state: d.expires < today ? 'expired' : daysBetween(today, d.expires) <= EXPIRY_WARNING_DAYS ? 'expiring' : 'valid' })),
+});
+
+export function list(p: Platform, user: User) {
+  guard(user, SEARCHERS);
+  return [...p.suppliers.values()].map(s => card(s, p.today));
+}
+
+export function get(p: Platform, user: User, supplierId: string) {
+  guard(user, SEARCHERS);
+  return card(p.get<Supplier>('suppliers', supplierId), p.today);
 }
 
 export function actions(p: Platform, user: User, supplierId: string) {
@@ -73,4 +90,4 @@ export function actions(p: Platform, user: User, supplierId: string) {
   return available(supplierFlow, p.get<Supplier>('suppliers', supplierId).status, user);
 }
 
-export const commands = { register, qualify, search, actions };
+export const commands = { register, qualify, search, actions, list, get };

@@ -5,7 +5,7 @@ import { awards } from './awards.js';
 import { READERS } from './evaluation.js';
 import { requisitions } from './intake.js';
 import { health, remaining } from './planning.js';
-import { events, projectOf } from './sourcing.js';
+import { EVALUATOR_KNOWERS, events, projectOf, STAFF } from './sourcing.js';
 // Dashboards, registers and audit read access. Read-only over other modules' tables.
 export function dashboard(p, user) {
     // Supplier-portal users must not read internal pipeline, savings or other suppliers' compliance data.
@@ -54,7 +54,7 @@ export function history(p, user, entity) {
     return p.audit.for(entity);
 }
 // Internal roles only: evaluators (blind), requesters and supplier-portal users do not get the enterprise map.
-const TWIN_ROLES = ['buyer', 'procurement_manager', 'category_manager', 'project_manager', 'executive', 'finance', 'budget_owner', 'legal', 'compliance_reviewer', 'auditor', 'admin'];
+const TWIN_ROLES = STAFF;
 export function twin(p, user) {
     guard(user, TWIN_ROLES);
     const nodes = [], edges = [];
@@ -111,4 +111,15 @@ export function twin(p, user) {
         .map(e => ({ at: e.at, type: e.action, ref: e.entity, actor: ['bid.submitted', 'clarification.asked'].includes(e.action) || p.users.get(e.actor)?.roles.includes('supplier') ? 'sealed' : e.actor }));
     return { nodes, edges, activity };
 }
-export const commands = { dashboard, exportPackages, history, twin };
+// Directory of internal people for pickers. Supplier-portal users never appear; evaluator-role holders only to
+// roles that may know the committee (the role itself would otherwise name the committee).
+const EVALUATORS = ['technical_evaluator', 'commercial_evaluator'];
+export function people(p, user) {
+    guard(user, TWIN_ROLES);
+    const knows = user.roles.some(r => EVALUATOR_KNOWERS.includes(r));
+    return [...p.users.values()]
+        .filter(u => !u.supplierId && !u.roles.includes('supplier') && (knows || !u.roles.some(r => EVALUATORS.includes(r))))
+        .map(({ id, name, roles }) => ({ id, name, roles }));
+}
+export const me = (_p, { id, name, roles, projects, approvalLimit }) => ({ id, name, roles, projects, approvalLimit });
+export const commands = { dashboard, exportPackages, history, twin, people, me };
