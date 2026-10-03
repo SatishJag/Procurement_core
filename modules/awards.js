@@ -108,13 +108,13 @@ export function actions(p, user, awardId) {
     const step = award.status === 'pending' ? award.steps.find(s => !s.decision) : undefined;
     return step && user.roles.includes(step.role) ? ['approved', 'rejected'] : [];
 }
-// Read models for staff. Same rule as the twin: value, allocations and rationale only once approved or for evaluation READERS;
-// otherwise the AED amount in step reasons is masked too.
+// Read models for staff. Same rule as the twin: value, allocations, rationale and steps only once approved or for evaluation READERS;
+// otherwise no steps either (the chain length gives away the value band): only the role the award waits on.
 function shape(user, a) {
     const { value, allocations, justification, steps, ...rest } = a;
     if (a.status === 'approved' || user.roles.some(r => READERS.includes(r)))
         return { ...rest, steps, value, allocations, justification };
-    return { ...rest, steps: steps.map(s => ({ ...s, reason: s.reason.replace(/AED [\d,]+(\.\d+)?/g, 'AED (sealed)') })) };
+    return { ...rest, waitingFor: a.status === 'pending' ? steps.find(s => !s.decision)?.role : undefined };
 }
 export function get(p, user, awardId) {
     const award = p.get('awards', awardId);

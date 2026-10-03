@@ -148,8 +148,9 @@ export function uploadBoq(p: Platform, user: User, input: { projectId: string; n
 }
 
 export function createPackagesFromBoq(p: Platform, user: User, input: { boqTemplateId: string; costCode: string; category: string; estimate: number; needBy: string; route: Route; longLead: boolean }) {
+  guard(user, ['buyer', 'procurement_manager']);
   const boq = p.get<BoqTemplate>('boqTemplates', input.boqTemplateId);
-  guard(user, ['buyer', 'procurement_manager'], { projectId: boq.projectId });
+  guard(user, user.roles, { projectId: boq.projectId });
   if (!(input.estimate > 0)) throw new Error('Estimate must be positive');
   if (!ISO_DATE.test(input.needBy) || input.needBy <= p.today) throw new Error('Need-by must be a future YYYY-MM-DD date');
   const project = p.get<Project>('projects', boq.projectId);

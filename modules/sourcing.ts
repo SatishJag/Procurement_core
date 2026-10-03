@@ -179,11 +179,12 @@ const INVITEE_VIEWERS: Role[] = ['buyer', 'procurement_manager', 'category_manag
 const has = (user: User, roles: Role[]) => user.roles.some(r => roles.includes(r));
 const unopened = (ev: SourcingEvent) => ev.status === 'draft' || ev.status === 'open';
 
-// Staff, or an evaluator once their envelope is open (committee member / commercial evaluator). Suppliers use portal.
+// Staff, or an evaluator once their envelope is open: committee technical evaluators from `technical`, commercial evaluators from `commercial`. Suppliers use portal.
 function staffEvent(p: Platform, user: User, id: string) {
   const ev = eventFor(p, user, id);
-  const evaluating = !unopened(ev) && ev.status !== 'closed' &&
-    (user.roles.includes('commercial_evaluator') || (user.roles.includes('technical_evaluator') && ev.evaluators.includes(user.id)));
+  const evaluating =
+    (user.roles.includes('technical_evaluator') && ev.evaluators.includes(user.id) && ['technical', 'commercial', 'approval', 'awarded'].includes(ev.status)) ||
+    (user.roles.includes('commercial_evaluator') && ['commercial', 'approval', 'awarded'].includes(ev.status));
   if (!has(user, STAFF) && !evaluating) throw new Error(`${user.name} needs one of: ${STAFF.join(', ')}`);
   return ev;
 }
@@ -203,8 +204,9 @@ export function view(p: Platform, user: User, eventId: string) {
 export function clarifications(p: Platform, user: User, eventId: string) {
   const ev = staffEvent(p, user, eventId);
   const reveal = !unopened(ev) && has(user, INVITEE_VIEWERS);
-  return ev.clarifications.map(c => ({
-    id: c.id, question: c.question, answered: !!c.answer, answer: c.answer, extendedTo: c.extendedTo, askedBy: reveal ? c.supplierId : 'sealed',
+  const early = unopened(ev) && !has(user, ['buyer', 'procurement_manager']); // unanswered questions can hint at bidders: answered ones only
+  return ev.clarifications.filter(c => !early || c.answer).map(c => ({
+    id: c.id, question: c.question, answer: c.answer, extendedTo: c.extendedTo, askedBy: reveal ? c.supplierId : 'sealed',
   }));
 }
 

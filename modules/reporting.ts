@@ -107,10 +107,10 @@ export function twin(p: Platform, user: User) {
     if (!linked.has(s.id) && s.status !== 'qualified') continue;
     nodes.push({ id: s.id, kind: 'supplier', label: s.name, status: s.status, meta: { risk: s.risk, category: s.categories.join(', '), country: s.country } });
   }
-  // Activity: only entities the caller can see; supplier-portal actors and bidders stay sealed, bid rows wait for the event to close.
+  // Activity: only entities the caller can see; supplier-portal actors, bidders and the evaluation committee stay sealed, bid rows wait for the event to close.
   const seen = new Set([...nodes.map(n => n.id), ...[...requisitions(p).values()].filter(r => p.sees(user, r.projectId)).map(r => r.id)]);
   const activity = p.audit.events.filter(e => seen.has(e.entity) && !(e.action === 'bid.submitted' && events(p).get(e.entity)?.status === 'open')).slice(-25).reverse()
-    .map(e => ({ at: e.at, type: e.action, ref: e.entity, actor: ['bid.submitted', 'clarification.asked'].includes(e.action) || p.users.get(e.actor)?.roles.includes('supplier') ? 'sealed' : e.actor }));
+    .map(e => ({ at: e.at, type: e.action, ref: e.entity, actor: ['bid.submitted', 'clarification.asked'].includes(e.action) || /^(score|conflict)\.|^technical\./.test(e.action) || p.users.get(e.actor)?.roles.some(r => r === 'supplier' || EVALUATORS.includes(r)) ? 'sealed' : e.actor }));
   return { nodes, edges, activity };
 }
 

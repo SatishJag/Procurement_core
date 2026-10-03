@@ -12,11 +12,11 @@ const u = (id: string, roles: User['roles'], projects = ['*'], extra: Partial<Us
 const users = [
   u('req1', ['requester'], ['P1']), u('req2', ['requester'], ['P1']), u('b1', ['buyer'], ['P1']), u('b2', ['buyer'], ['P2']), u('boss', ['buyer']),
   u('pm', ['procurement_manager']), u('cm', ['category_manager']), u('bo', ['budget_owner'], ['*'], { approvalLimit: 10_000_000 }),
-  u('te', ['technical_evaluator']), u('aud', ['auditor']),
+  u('te', ['technical_evaluator']), u('ce', ['commercial_evaluator']), u('aud', ['auditor']),
   u('sup1', ['supplier'], [], { supplierId: 'S1' }), u('sup3', ['supplier'], [], { supplierId: 'S3' }),
 ];
 const U = Object.fromEntries(users.map(x => [x.id, x]));
-const sched = { milestones: [], floatDays: 90, health: 'on_track' };
+const sched = { milestones: [{ name: 'RFx issue', date: '2027-01-01' }], floatDays: 90, health: 'on_track' };
 const PRICE = 987_654.32, AWARD = 1_234_567;
 
 function setup() {
@@ -60,6 +60,7 @@ test('intake: BOQ packages guard on the BOQ project; requisition read models are
   assert.equal(intake.createPackagesFromBoq(p, U.b1, { ...input, boqTemplateId: boq1.id }).projectId, 'P1');
   assert.throws(() => intake.createPackagesFromBoq(p, U.b1, { ...input, boqTemplateId: boq2.id }), /no access to project P2/);
   assert.throws(() => intake.createPackagesFromBoq(p, U.req1, { ...input, boqTemplateId: boq1.id }), /needs one of/);
+  assert.throws(() => intake.createPackagesFromBoq(p, U.req1, { ...input, boqTemplateId: 'BOQ-nope' }), /needs one of/); // no probing of BOQ ids
 
   assert.equal(intake.get(p, U.req1, 'PR-1').id, 'PR-1');                       // own
   assert.throws(() => intake.get(p, U.req1, 'PR-2'), /no access/);               // someone else's
@@ -74,10 +75,12 @@ test('intake: BOQ packages guard on the BOQ project; requisition read models are
 test('awards: get masks value, allocations and rationale for non-readers; check reuses the decision rules', () => {
   const p = setup();
   const full = awards.get(p, U.pm, 'AW-1') as { value?: number; allocations?: unknown; steps: { reason: string }[] };
+  assert.equal(full.steps.length, 2);
   assert.equal(full.value, AWARD);
   assert.ok(full.allocations && full.steps[0].reason.includes('1,234,567'));
   const sealed = awards.get(p, U.cm, 'AW-1');
   assert.ok(!JSON.stringify(sealed).includes('1234567') && !JSON.stringify(sealed).includes('1,234,567') && !('allocations' in sealed) && !('justification' in sealed));
+  assert.ok(!('steps' in sealed) && (sealed as { waitingFor?: string }).waitingFor === 'procurement_manager'); // chain length would reveal the band
   p.table<{ id: string; status: string }>('awards').get('AW-1')!.status = 'approved';
   assert.equal((awards.get(p, U.cm, 'AW-1') as { value?: number }).value, AWARD);   // approved: value is open
   p.table<{ id: string; status: string }>('awards').get('AW-1')!.status = 'pending';
@@ -118,17 +121,22 @@ test('sourcing: view and clarifications seal bidder, price and committee data; i
   assert.throws(() => sourcing.view(p, U.b1, 'EV-2'), /no access to project P2/);
   assert.throws(() => sourcing.view(p, U.sup1, 'EV-1'), /needs one of/);
   assert.throws(() => sourcing.view(p, U.te, 'EV-1'), /needs one of/);                       // evaluator before technical opens
-  assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.askedBy), ['sealed', 'sealed']);
-  assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.answered), [true, false]);
+  assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.id), ['CL-1']);             // open: unanswered text only for buyer / procurement_manager
+  assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.askedBy), ['sealed']);
+  assert.deepEqual(sourcing.clarifications(p, U.pm, 'EV-1').map(c => c.id), ['CL-1', 'CL-2']);
   assert.throws(() => sourcing.clarifications(p, U.sup1, 'EV-1'), /needs one of/);
   const ev = p.table<{ status: string }>('events').get('EV-1')!;
   ev.status = 'closed';
   assert.equal((sourcing.view(p, U.pm, 'EV-1') as { bids: number }).bids, 2);
   assert.ok(!JSON.stringify(sourcing.view(p, U.pm, 'EV-1')).includes('987654'));
   assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.askedBy), ['S1', 'S2']);
+  assert.deepEqual(sourcing.clarifications(p, U.cm, 'EV-1').map(c => c.id), ['CL-1', 'CL-2']);
   ev.status = 'technical';
   assert.ok(!('evaluators' in sourcing.view(p, U.te, 'EV-1')) && !('invited' in sourcing.view(p, U.te, 'EV-1')));
   assert.deepEqual(sourcing.clarifications(p, U.te, 'EV-1').map(c => c.askedBy), ['sealed', 'sealed']);
+  assert.throws(() => sourcing.view(p, U.ce, 'EV-1'), /needs one of/);                       // commercial evaluator waits for `commercial`
+  ev.status = 'commercial';
+  assert.equal(sourcing.view(p, U.ce, 'EV-1').id, 'EV-1');
 
   ev.status = 'open';
   assert.deepEqual(sourcing.invitations(p, U.sup1), [{ id: 'EV-1', title: 'Gens RFP', closesAt: '2027-01-01T00:00:00Z', status: 'open' }]); // EV-2 is draft
@@ -154,4 +162,11 @@ test('suppliers and reporting: directory reads', () => {
   for (const m of [awards, intake, sourcing, suppliers, reporting]) assert.ok(Object.keys(m.commands).length);
   assert.ok(['get', 'list', 'check'].every(k => k in awards.commands) && ['get', 'list'].every(k => k in intake.commands && k in suppliers.commands));
   assert.ok(['view', 'clarifications', 'invitations'].every(k => k in sourcing.commands) && ['people', 'me'].every(k => k in reporting.commands));
+});
+
+test('twin activity: evaluation actors are sealed for staff', () => {
+  const p = setup();
+  p.emit(U.te, 'score.recorded', 'EV-1'); p.emit(U.pm, 'conflict.declared', 'EV-1'); p.emit(U.pm, 'technical.opened', 'EV-1'); p.emit(U.boss, 'event.published', 'EV-1');
+  const actors = Object.fromEntries(reporting.twin(p, U.cm).activity.map(a => [a.type, a.actor]));
+  assert.deepEqual([actors['score.recorded'], actors['conflict.declared'], actors['technical.opened'], actors['event.published']], ['sealed', 'sealed', 'sealed', 'boss']);
 });

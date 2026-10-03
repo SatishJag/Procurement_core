@@ -143,8 +143,9 @@ export function uploadBoq(p, user, input) {
     return boq;
 }
 export function createPackagesFromBoq(p, user, input) {
+    guard(user, ['buyer', 'procurement_manager']);
     const boq = p.get('boqTemplates', input.boqTemplateId);
-    guard(user, ['buyer', 'procurement_manager'], { projectId: boq.projectId });
+    guard(user, user.roles, { projectId: boq.projectId });
     if (!(input.estimate > 0))
         throw new Error('Estimate must be positive');
     if (!ISO_DATE.test(input.needBy) || input.needBy <= p.today)
