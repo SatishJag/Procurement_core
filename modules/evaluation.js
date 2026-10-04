@@ -294,4 +294,29 @@ function resolve(ev, ref) {
         throw new Error(`Unknown bidder ${ref}`);
     return bid.supplierId;
 }
-export const commands = { openTechnical, technicalPack, declareConflicts, score, moderate, completeTechnical, loadExclusion, results };
+// Why each criterion scored as it did: consensus, committee note and the evaluators' written basis. Read-only.
+// Technical stage: an evaluator sees only their own marks (no anchoring), the manager sees all. Once the commercial envelope
+// opens, readers see every counted mark; evaluator names go to the manager and auditor only.
+export function scoreBasis(p, user, eventId, bidderRef) {
+    const ev = eventFor(p, user, eventId);
+    const scoring = ev.status === 'technical';
+    if (scoring)
+        guard(user, ['technical_evaluator', 'procurement_manager']);
+    else if (['commercial', 'approval', 'awarded'].includes(ev.status))
+        guard(user, READERS);
+    else
+        throw new Error('Technical envelope is not open yet');
+    const supplierId = resolve(ev, bidderRef);
+    const own = scoring && !user.roles.includes('procurement_manager');
+    if (own && ev.declarations[user.id]?.includes(supplierId))
+        throw new Error('Conflict declared: you cannot view this bidder');
+    const named = user.roles.some(r => r === 'procurement_manager' || r === 'auditor');
+    return ev.criteria.map(c => {
+        const marks = ev.scores
+            .filter(s => s.supplierId === supplierId && s.criterionId === c.id && !ev.declarations[s.evaluatorId]?.includes(supplierId) && (!own || s.evaluatorId === user.id))
+            .map(s => ({ evaluator: s.evaluatorId === user.id ? 'You' : named ? p.users.get(s.evaluatorId)?.name ?? s.evaluatorId : `Evaluator ${ev.evaluators.indexOf(s.evaluatorId) + 1}`, score: s.score, comment: s.comment }));
+        const m = ev.moderations.find(x => x.supplierId === supplierId && x.criterionId === c.id);
+        return { id: c.id, name: c.name, weight: c.weight, gate: !!c.gate, marks, moderation: m && { score: m.score, note: m.note } };
+    });
+}
+export const commands = { openTechnical, technicalPack, declareConflicts, score, moderate, completeTechnical, loadExclusion, results, scoreBasis };

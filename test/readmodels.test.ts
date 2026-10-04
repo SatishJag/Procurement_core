@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { User } from '../core/types.ts';
 import { createPlatform } from '../modules/index.ts';
 import * as awards from '../modules/awards.ts';
+import * as evaluation from '../modules/evaluation.ts';
 import * as intake from '../modules/intake.ts';
 import * as reporting from '../modules/reporting.ts';
 import * as sourcing from '../modules/sourcing.ts';
@@ -169,4 +170,28 @@ test('twin activity: evaluation actors are sealed for staff', () => {
   p.emit(U.te, 'score.recorded', 'EV-1'); p.emit(U.pm, 'conflict.declared', 'EV-1'); p.emit(U.pm, 'technical.opened', 'EV-1'); p.emit(U.boss, 'event.published', 'EV-1');
   const actors = Object.fromEntries(reporting.twin(p, U.cm).activity.map(a => [a.type, a.actor]));
   assert.deepEqual([actors['score.recorded'], actors['conflict.declared'], actors['technical.opened'], actors['event.published']], ['sealed', 'sealed', 'sealed', 'boss']);
+});
+
+test('evaluation.scoreBasis: evaluator sees own marks only while scoring, readers see the basis once commercial opens, names stay with manager and auditor', () => {
+  const p = setup();
+  const ev = p.table<{ status: string; evaluators: string[]; scores: unknown[]; moderations: unknown[]; declarations: Record<string, string[]> }>('events').get('EV-1')!;
+  ev.evaluators = ['te', 'x2']; ev.declarations = { te: [], x2: [] };
+  ev.scores = [{ evaluatorId: 'te', supplierId: 'S1', criterionId: 'Q', score: 9, comment: 'Four verified references' }, { evaluatorId: 'x2', supplierId: 'S1', criterionId: 'Q', score: 7, comment: 'Programme thin' }];
+  ev.moderations = [{ supplierId: 'S1', criterionId: 'Q', score: 8, note: 'Committee agreed 8', by: 'pm' }];
+  assert.throws(() => evaluation.scoreBasis(p, U.pm, 'EV-1', 'S1'), /not open yet/);             // open: nothing to explain
+  ev.status = 'technical';
+  const mine = evaluation.scoreBasis(p, U.te, 'EV-1', 'Bidder A')[0];
+  assert.deepEqual(mine.marks.map(m => [m.evaluator, m.score]), [['You', 9]]);                    // no anchoring on colleagues
+  assert.deepEqual(evaluation.scoreBasis(p, U.pm, 'EV-1', 'Bidder A')[0].marks.map(m => m.evaluator), ['te', 'x2']);
+  assert.throws(() => evaluation.scoreBasis(p, U.ce, 'EV-1', 'Bidder A'), /needs one of/);       // commercial evaluator before commercial
+  ev.declarations.te = ['S1'];
+  assert.throws(() => evaluation.scoreBasis(p, U.te, 'EV-1', 'Bidder A'), /Conflict declared/);
+  assert.deepEqual(evaluation.scoreBasis(p, U.pm, 'EV-1', 'S1')[0].marks.map(m => m.evaluator), ['x2']); // conflicted marks do not count
+  ev.declarations.te = []; ev.status = 'commercial';
+  const read = evaluation.scoreBasis(p, U.ce, 'EV-1', 'S1')[0];
+  assert.deepEqual(read.marks.map(m => [m.evaluator, m.comment]), [['Evaluator 1', 'Four verified references'], ['Evaluator 2', 'Programme thin']]);
+  assert.equal(read.moderation?.note, 'Committee agreed 8');
+  assert.deepEqual(evaluation.scoreBasis(p, U.aud, 'EV-1', 'S1')[0].marks.map(m => m.evaluator), ['te', 'x2']);
+  assert.throws(() => evaluation.scoreBasis(p, U.te, 'EV-1', 'S1'), /needs one of/);
+  assert.throws(() => evaluation.scoreBasis(p, U.sup1, 'EV-1', 'S1'), /needs one of/);
 });
