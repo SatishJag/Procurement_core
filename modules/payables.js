@@ -357,9 +357,26 @@ export function actions(p, user, id) {
 }
 // Reads: staff with project access; suppliers have no role here.
 export function get(p, user, id) { return load(p, user, READERS, id); }
-export function list(p, user) {
+// List reads are newest first: tables keep insertion order and nothing is ever deleted, so reversing it is the time order.
+const seen = (p, user, rows) => {
     guard(user, READERS);
-    return [...tbl.invoices(p).values()].filter(i => p.sees(user, i.projectId));
+    return [...rows.values()].filter(r => p.sees(user, r.projectId)).reverse();
+};
+export function list(p, user) { return seen(p, user, tbl.invoices(p)); }
+export function listIpcs(p, user) {
+    return seen(p, user, tbl.ipcs(p)).map(({ id, ipcRef, version, contractId, projectId, supplierId, periodFrom, periodTo, status, errors, calc, invoiceId, stagedAt, certifiedBy }) => ({ id, ipcRef, version, contractId, projectId, supplierId, periodFrom, periodTo, status, errors, calc, invoiceId, stagedAt, certifiedBy }));
+}
+export function listJournals(p, user) { return seen(p, user, tbl.journals(p)); }
+// Every contract the caller can see, with or without finance terms (the UI prompts to set them).
+export function listContracts(p, user) {
+    guard(user, READERS);
+    return [...p.table('contracts').values()].flatMap(c => {
+        const { projectId } = contractOf(p, c.id);
+        if (!p.sees(user, projectId))
+            return [];
+        const t = tbl.terms(p).get(c.id);
+        return [{ id: c.id, supplierId: c.supplierId, supplierName: p.suppliers.get(c.supplierId)?.name ?? null, projectId, value: c.value, terms: t ?? null, position: t ? position(p, t) : null }];
+    });
 }
 export function getIpc(p, user, id) {
     const ipc = p.get('ap_ipcs', id);
@@ -374,10 +391,13 @@ export function ipcStatus(p, user, id) {
 export function contractPosition(p, user, contractId) {
     const { projectId } = contractOf(p, contractId);
     guard(user, READERS, { projectId });
-    const t = p.get('contract_terms', contractId);
+    return position(p, p.get('contract_terms', contractId));
+}
+const position = (p, t) => {
+    const contractId = t.id;
     return {
         contractId, revisedValue: t.revisedValue, cumulativeCertified: t.certified, pendingCertified: sum(pending(p, contractId).map(i => i.calc.gross)),
         remainingCommitment: r2(t.revisedValue - t.certified), retentionBalance: t.retained, advanceBalance: r2(t.advanceAmount - t.advanceRecovered),
     };
-}
-export const commands = { setTerms, setClosedThrough, stageIpc, withdrawIpc, createInvoice, approveInvoice, rejectInvoice, hold, releaseHold, account, exportJournals, getBatch, actions, get, list, getIpc, ipcStatus, contractPosition };
+};
+export const commands = { setTerms, setClosedThrough, stageIpc, withdrawIpc, createInvoice, approveInvoice, rejectInvoice, hold, releaseHold, account, exportJournals, getBatch, actions, get, list, listIpcs, listContracts, listJournals, getIpc, ipcStatus, contractPosition };

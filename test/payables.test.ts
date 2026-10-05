@@ -8,7 +8,7 @@ const u = (id: string, roles: User['roles'], projects = ['P1'], extra: Partial<U
 const users = [
   u('pm', ['project_manager']), u('pmfin', ['project_manager', 'finance'], ['P1'], { approvalLimit: 9e9 }),
   u('fin', ['finance'], ['P1'], { approvalLimit: 5_000_000 }), u('fin2', ['finance'], ['P1'], { approvalLimit: 500_000 }),
-  u('exec', ['executive'], ['*'], { approvalLimit: 50_000_000 }), u('exec2', ['executive'], ['*'], { approvalLimit: 50_000_000 }), u('exec0', ['executive'], ['*']), u('execP1', ['executive'], ['P1'], { approvalLimit: 1e9 }), u('aud', ['auditor']), u('buyer', ['buyer']), u('other', ['finance'], ['P2']), u('sup', ['supplier'], [], { supplierId: 'S1' }),
+  u('exec', ['executive'], ['*'], { approvalLimit: 50_000_000 }), u('exec2', ['executive'], ['*'], { approvalLimit: 50_000_000 }), u('exec0', ['executive'], ['*']), u('execP1', ['executive'], ['P1'], { approvalLimit: 1e9 }), u('aud', ['auditor']), u('req', ['requester']), u('buyer', ['buyer']), u('other', ['finance'], ['P2']), u('sup', ['supplier'], [], { supplierId: 'S1' }),
 ];
 const U = Object.fromEntries(users.map(x => [x.id, x]));
 const now = '2026-10-02T09:00:00.000Z';
@@ -297,4 +297,41 @@ test('QA 12: message ids are scoped to the contract and a clash elsewhere is neu
   p.table('contracts').set('CT-2', { id: 'CT-2', awardId: 'AW-1', supplierId: 'S1', lotIds: [], value: 1, status: 'draft' });
   staged(p, { messageId: 'SHARED' });
   assert.throws(() => pay.stageIpc(p, U.pm, 'CT-2', ipc({ messageId: 'SHARED' })), (e: Error) => e.message === 'Message id already used');
+});
+
+test('list reads: newest first, project-scoped, refused to suppliers and requesters, contracts listed with or without terms', () => {
+  const p = setup();
+  const a = pay.createInvoice(p, U.fin, staged(p, { invoiceDate: '2026-10-01' }).id), b = pay.createInvoice(p, U.fin, staged(p, { invoiceDate: '2026-10-02' }).id);
+  const failed = staged(p, { ipcRef: '' });
+  assert.deepEqual(pay.list(p, U.aud).map(i => i.id), [b.id, a.id]);
+  const ipcs = pay.listIpcs(p, U.buyer);
+  assert.deepEqual(ipcs.map(i => i.id), [failed.id, b.ipcId, a.ipcId]);
+  assert.deepEqual(Object.keys(ipcs[1]).sort(), ['calc', 'certifiedBy', 'contractId', 'errors', 'id', 'invoiceId', 'ipcRef', 'periodFrom', 'periodTo', 'projectId', 'stagedAt', 'status', 'supplierId', 'version']);
+  assert.equal(ipcs[1].calc!.netPayable, 871_500);
+  assert.equal(ipcs[0].status, 'validation_failed');
+
+  pay.approveInvoice(p, U.exec, a.id); pay.approveInvoice(p, U.exec, b.id);
+  const j1 = pay.account(p, U.fin, a.id), j2 = pay.account(p, U.fin, b.id);
+  assert.deepEqual(pay.listJournals(p, U.aud).map(j => j.id), [j2.id, j1.id]);
+  assert.equal(pay.listJournals(p, U.aud)[0].lines.length, 6);
+  const batch = pay.exportJournals(p, U.fin);
+  assert.deepEqual(pay.listJournals(p, U.aud).map(j => [j.status, j.batchId]), [['transferred', batch.batchId], ['transferred', batch.batchId]]);
+
+  // a second project's contract without terms: visible to P2 staff and '*' users only
+  p.table('packages').set('PKG-2', { id: 'PKG-2', projectId: 'P2', costCode: 'C1' });
+  p.table('events').set('EV-2', { id: 'EV-2', packageId: 'PKG-2' });
+  p.table('awards').set('AW-2', { id: 'AW-2', eventId: 'EV-2' });
+  p.table('contracts').set('CT-P2', { id: 'CT-P2', awardId: 'AW-2', supplierId: 'S1', lotIds: [], value: 777, status: 'draft' });
+  const mine = pay.listContracts(p, U.fin);
+  assert.deepEqual(mine.map(c => c.id), ['CT-1']);
+  assert.equal(mine[0].supplierName, 'Alpha');
+  assert.equal(mine[0].terms!.revisedValue, 10_000_000);
+  assert.deepEqual(mine[0].position, pay.contractPosition(p, U.fin, 'CT-1'));
+  assert.equal(mine[0].position!.cumulativeCertified, 2_000_000);
+  assert.deepEqual(pay.listContracts(p, U.other), [{ id: 'CT-P2', supplierId: 'S1', supplierName: 'Alpha', projectId: 'P2', value: 777, terms: null, position: null }]);
+  assert.deepEqual(pay.listContracts(p, U.exec).map(c => c.id), ['CT-1', 'CT-P2']);
+
+  assert.deepEqual([pay.list(p, U.other), pay.listIpcs(p, U.other), pay.listJournals(p, U.other)], [[], [], []]);
+  for (const user of [U.sup, U.req]) for (const fn of [pay.list, pay.listIpcs, pay.listContracts, pay.listJournals]) assert.throws(() => fn(p, user), /needs one of/);
+  assert.equal(pay.commands.listContracts, pay.listContracts);
 });
