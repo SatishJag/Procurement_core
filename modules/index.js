@@ -7,6 +7,7 @@ export * as contracts from './contracts.js';
 export * as evaluation from './evaluation.js';
 export * as insight from './insight.js';
 export * as intake from './intake.js';
+export * as payables from './payables.js';
 export * as planning from './planning.js';
 export * as reporting from './reporting.js';
 export * as sourcing from './sourcing.js';

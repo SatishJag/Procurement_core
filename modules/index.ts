@@ -8,6 +8,7 @@ export * as contracts from './contracts';
 export * as evaluation from './evaluation';
 export * as insight from './insight';
 export * as intake from './intake';
+export * as payables from './payables';
 export * as planning from './planning';
 export * as reporting from './reporting';
 export * as sourcing from './sourcing';
